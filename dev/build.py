@@ -26,8 +26,8 @@ assets = {
     "@@LEAFLET_JS@@": asset("leaflet/dist/leaflet.js"),
     "@@EXIFR_JS@@": asset("exifr/dist/full.umd.js"),
     "@@JSZIP_JS@@": asset("jszip/dist/jszip.min.js"),
-    "@@PDFJS_JS@@": asset("pdfjs-dist/legacy/build/pdf.min.js"),
-    "@@PDF_WORKER@@": asset("pdfjs-dist/legacy/build/pdf.worker.min.js"),
+    "@@PDFJS_JS@@": asset("pdfjs-dist/legacy/build/pdf.min.mjs"),
+    "@@PDF_WORKER@@": asset("pdfjs-dist/legacy/build/pdf.worker.min.mjs"),
 }
 
 def build(template, dest):

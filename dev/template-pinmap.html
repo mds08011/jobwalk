@@ -135,8 +135,14 @@ details li { margin:5px 0; }
 <script id="exifr-js">
 @@EXIFR_JS@@
 </script>
-<script id="pdfjs-js">
+<script id="pdfjs-js" type="module">
 @@PDFJS_JS@@
+/* pdf.js ships as an ES module from v4 on. The legacy build still sets the
+   globalThis.pdfjsLib the classic scripts below use, so only the worker needs
+   wiring, and it has to happen here: module scripts are deferred, so this runs
+   after the document is parsed and well before any user interaction. */
+GlobalWorkerOptions.workerSrc = URL.createObjectURL(
+  new Blob([document.getElementById('pdf-worker-src').textContent], { type: 'text/javascript' }));
 </script>
 <script id="pdf-worker-src" type="text/plain">
 @@PDF_WORKER@@
@@ -178,12 +184,7 @@ var armedId = null;
 var pdfDoc = null;
 var map = null, overlay = null, bounds = null;
 
-/* pdf.js worker from the inline copy above */
-if (window.pdfjsLib) {
-  var wsrc = document.getElementById('pdf-worker-src').textContent;
-  pdfjsLib.GlobalWorkerOptions.workerSrc =
-    URL.createObjectURL(new Blob([wsrc], { type: 'text/javascript' }));
-}
+/* pdf.js configures its own worker in the module script above. */
 
 var statusEl = document.getElementById('status');
 var trayEl = document.getElementById('tray');
