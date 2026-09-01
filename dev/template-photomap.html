@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PhotoMap — Job Walk Photo Map</title>
+<style id="leaflet-css">
+@@LEAFLET_CSS@@
+</style>
+<style id="viewer-css">
+/* shared with the exported map file */
+.pm-hdr { position:absolute; top:0; left:0; right:0; z-index:1000;
+  background:rgba(255,255,255,.93); padding:6px 12px; font-size:13px;
+  border-bottom:1px solid #ccc; pointer-events:none; font-family:system-ui,sans-serif; }
+.pm-pop img { max-width:320px; width:100%; display:block; border-radius:2px; cursor:pointer; }
+.pm-pop .cap { font-size:12px; color:#333; padding-top:4px; font-family:system-ui,sans-serif; }
+.pm-pop .usercap { font-size:12px; color:#111; padding-top:2px; font-style:italic; font-family:system-ui,sans-serif; }
+.leaflet-popup-content { margin:8px; }
+#pm-lightbox { display:none; position:fixed; inset:0; z-index:2000;
+  background:rgba(0,0,0,.88); cursor:zoom-out; align-items:center; justify-content:center; }
+#pm-lightbox img { max-width:96vw; max-height:96vh; }
+.pm-measure-ctl { background:#fff; border:2px solid rgba(0,0,0,.25); border-radius:4px;
+  font:13px/1.3 system-ui,sans-serif; }
+.pm-measure-ctl a { display:block; padding:5px 9px; color:#333; text-decoration:none; cursor:pointer; }
+.pm-measure-ctl a.on { background:#e8590c; color:#fff; }
+.pm-measure-ctl a.clr { border-top:1px solid #ddd; font-size:11px; color:#777; }
+.pm-mtip { font:600 12px system-ui,sans-serif; }
+</style>
+<style>
+/* generator UI only */
+html, body { margin:0; height:100%; font-family:system-ui,sans-serif; background:#f4f4f2; color:#222; }
+#app { display:flex; height:100%; }
+#side { width:360px; min-width:320px; background:#fff; border-right:1px solid #ddd;
+  display:flex; flex-direction:column; overflow-y:auto; }
+#side .pad { padding:14px 16px; }
+h1 { font-size:17px; margin:0 0 2px; }
+h1 .dot { color:#e8590c; }
+.sub { font-size:12px; color:#666; margin:0 0 12px; }
+.xlink { font-size:11.5px; margin:-8px 0 12px; }
+.xlink a { color:#b34a06; }
+label { display:block; font-size:12px; font-weight:600; margin:10px 0 3px; }
+input[type=text], select { width:100%; box-sizing:border-box; padding:7px 8px;
+  border:1px solid #ccc; border-radius:4px; font-size:13px; font-family:inherit; }
+#drop { border:2px dashed #bbb; border-radius:6px; padding:20px 12px; text-align:center;
+  font-size:13px; color:#555; margin-top:12px; cursor:pointer; transition:all .15s; }
+#drop.hover { border-color:#e8590c; background:#fff4ec; color:#e8590c; }
+#drop b { color:#e8590c; }
+#file-input { display:none; }
+button { font-family:inherit; font-size:13px; border-radius:4px; cursor:pointer; }
+#dl-btn { width:100%; padding:10px; margin-top:12px; background:#e8590c; color:#fff;
+  border:none; font-weight:600; font-size:14px; }
+.btnrow { display:flex; gap:6px; margin-top:6px; }
+.btnrow button { flex:1; padding:8px 4px; background:#fff; color:#b34a06;
+  border:1px solid #e8590c; font-weight:600; }
+button:disabled { background:#ccc !important; color:#fff !important; border-color:#ccc !important; cursor:not-allowed; }
+#clear-btn { width:100%; padding:6px; margin-top:6px; background:#fff; color:#666;
+  border:1px solid #ccc; }
+#status { font-size:12.5px; margin-top:10px; line-height:1.45; }
+#status .ok { color:#1a7f37; font-weight:600; }
+#status .warn { color:#b35c00; }
+#skipped { font-size:11.5px; color:#8a6d3b; background:#fdf6ec; border:1px solid #f0e0c0;
+  border-radius:4px; padding:6px 8px; margin-top:8px; max-height:110px; overflow-y:auto;
+  display:none; white-space:pre-wrap; word-break:break-word; }
+#plist { font-size:11.5px; color:#555; margin-top:8px; max-height:230px; overflow-y:auto; }
+#plist .row { padding:4px 0; border-bottom:1px dotted #e5e5e5; }
+#plist .nog { color:#b35c00; font-weight:600; }
+#plist input.cap { width:100%; box-sizing:border-box; margin-top:3px; padding:3px 6px;
+  border:1px solid #ddd; border-radius:3px; font-size:11.5px; }
+details { font-size:12px; color:#555; margin-top:14px; border-top:1px solid #eee; padding-top:10px; }
+summary { cursor:pointer; font-weight:600; color:#444; }
+details li { margin:5px 0; }
+#mapwrap { flex:1; position:relative; }
+#map { height:100%; }
+#map-empty { position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+  z-index:500; color:#888; font-size:14px; background:#e9e7e2; text-align:center; padding:0 30px; }
+.privacy { font-size:11px; color:#999; margin-top:10px; }
+@media (max-width:700px){ #app{flex-direction:column;} #side{width:auto;min-width:0;max-height:55%;} }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="side">
+    <div class="pad">
+      <h1>Photo<span class="dot">Map</span></h1>
+      <p class="sub">Drop job-walk photos &rarr; map, photo log &amp; Google Earth files anyone can open. Photos never leave this computer.</p>
+      <p class="xlink">Indoors or GPS-dead site? Use <a href="pinmap.html">PinMap &rarr;</a></p>
+
+      <label for="title-input">Title</label>
+      <input type="text" id="title-input" placeholder="e.g. OCSAN 15-Pack Job Walk 2026-08-30">
+
+      <label for="size-sel">Embedded photo size</label>
+      <select id="size-sel">
+        <option value="800">Small — 800 px (smallest file)</option>
+        <option value="1200" selected>Medium — 1200 px (recommended)</option>
+        <option value="1600">Large — 1600 px (bigger file)</option>
+      </select>
+
+      <div id="drop">
+        <b>Drop photos or a folder here</b><br>or click to browse
+        <input type="file" id="file-input" multiple accept="image/*,.jpg,.jpeg,.png,.heic">
+      </div>
+
+      <div id="status">No photos loaded yet.</div>
+      <div id="skipped"></div>
+      <div id="plist"></div>
+
+      <button id="dl-btn" disabled>Download map file</button>
+      <div class="btnrow">
+        <button id="log-btn" disabled>Photo log</button>
+        <button id="kmz-btn" disabled>KMZ (Google Earth)</button>
+      </div>
+      <button id="clear-btn">Clear all</button>
+
+      <details>
+        <summary>Tips &amp; troubleshooting</summary>
+        <ul>
+          <li><b>Captions</b> typed in the photo list flow into the map popups, the photo log, and the KMZ.</li>
+          <li><b>No GPS tag?</b> The photo still goes in the photo log, just not on the map. Location must be on for the camera app (iPhone: Settings &rarr; Privacy &amp; Security &rarr; Location Services &rarr; Camera &rarr; While Using).</li>
+          <li><b>HEIC photos</b> can't be read by the browser. On iPhone set Settings &rarr; Camera &rarr; Formats &rarr; Most Compatible, or transfer via OneDrive / cable (usually converts to JPEG and keeps the GPS tag). Texting or some AirDrop paths strip GPS tags.</li>
+          <li><b>Measure:</b> the ruler button on the map (here and in exported maps) measures distance in feet and area in acres &mdash; click points, double-click to finish, Esc to cancel.</li>
+          <li>All downloads are self-contained &mdash; email them or drop them in the job folder. Internet is only needed to draw the basemap. The photo log opens in a browser and prints to PDF (Ctrl+P); captions in it stay editable until printed.</li>
+          <li>Photos are numbered in the order taken; numbers match between map dots, photo log, and KMZ.</li>
+        </ul>
+      </details>
+      <p class="privacy">Everything runs locally in your browser &mdash; no photo data is uploaded anywhere.</p>
+    </div>
+  </div>
+  <div id="mapwrap">
+    <div id="map"></div>
+    <div id="map-empty">Preview appears here once geotagged photos are loaded</div>
+  </div>
+</div>
+<div id="pm-lightbox" onclick="this.style.display='none'"><img id="pm-lightbox-img" alt=""></div>
+
+<script id="leaflet-js">
+@@LEAFLET_JS@@
+</script>
+<script id="exifr-js">
+@@EXIFR_JS@@
+</script>
+<script id="jszip-js">
+@@JSZIP_JS@@
+</script>
+
+<script id="measure-src">
+/* Distance/area measure control — used by this page and copied into exported maps. */
+function pmAddMeasure(map) {
+  var layers = L.featureGroup().addTo(map);
+  var active = false, pts = [], line = null, verts = [], tip = null;
+
+  function fmtDist(m) {
+    var ft = m * 3.28084;
+    return ft < 5280 ? Math.round(ft).toLocaleString() + ' ft' : (ft / 5280).toFixed(2) + ' mi';
+  }
+  function ringArea(p) {
+    if (p.length < 3) return 0;
+    var lat0 = p[0].lat * Math.PI / 180;
+    var mPerLat = 111132, mPerLon = 111320 * Math.cos(lat0);
+    var a = 0;
+    for (var i = 0; i < p.length; i++) {
+      var j = (i + 1) % p.length;
+      var xi = p[i].lng * mPerLon, yi = p[i].lat * mPerLat;
+      var xj = p[j].lng * mPerLon, yj = p[j].lat * mPerLat;
+      a += xi * yj - xj * yi;
+    }
+    return Math.abs(a / 2);
+  }
+  function fmtArea(m2) {
+    var sf = m2 * 10.7639;
+    return sf < 43560 ? Math.round(sf).toLocaleString() + ' sq ft' : (sf / 43560).toFixed(2) + ' ac';
+  }
+  function readout(p) {
+    var d = 0;
+    for (var i = 1; i < p.length; i++) d += map.distance(p[i - 1], p[i]);
+    var s = fmtDist(d);
+    if (p.length >= 3) s += '<br>area ' + fmtArea(ringArea(p));
+    return s;
+  }
+  function redraw() {
+    if (line) { layers.removeLayer(line); line = null; }
+    verts.forEach(function (v) { layers.removeLayer(v); });
+    verts = [];
+    if (tip) { map.removeLayer(tip); tip = null; }
+    if (!pts.length) return;
+    line = L.polyline(pts, { color: '#ffd43b', weight: 3, dashArray: '6 4' }).addTo(layers);
+    pts.forEach(function (ll) {
+      verts.push(L.circleMarker(ll, { radius: 3.5, color: '#ffd43b', fillColor: '#333', fillOpacity: 1, weight: 2 }).addTo(layers));
+    });
+    tip = L.tooltip({ permanent: true, direction: 'right', offset: [10, 0], className: 'pm-mtip' })
+      .setLatLng(pts[pts.length - 1]).setContent(readout(pts)).addTo(map);
+  }
+  function finish() {
+    if (pts.length >= 2) {
+      L.polyline(pts, { color: '#ffd43b', weight: 3 }).addTo(layers)
+        .bindTooltip(readout(pts), { permanent: true, direction: 'right', className: 'pm-mtip' }).openTooltip();
+      pts.forEach(function (ll) {
+        L.circleMarker(ll, { radius: 3.5, color: '#ffd43b', fillColor: '#333', fillOpacity: 1, weight: 2 }).addTo(layers);
+      });
+      clrBtn.style.display = 'block';
+    }
+    pts = [];
+    if (tip) { map.removeLayer(tip); tip = null; }
+    if (line) { layers.removeLayer(line); line = null; }
+    verts.forEach(function (v) { layers.removeLayer(v); });
+    verts = [];
+  }
+  function onClick(e) { if (!active) return; pts.push(e.latlng); redraw(); }
+  function onDbl(e) {
+    if (!active) return;
+    L.DomEvent.stop(e);
+    if (pts.length > 1) pts.pop(); /* dblclick fires an extra click */
+    redraw(); finish();
+  }
+  function onKey(e) { if (active && e.key === 'Escape') { pts = []; redraw(); } }
+
+  var ctl = L.control({ position: 'topleft' });
+  var btn, clrBtn;
+  ctl.onAdd = function () {
+    var div = L.DomUtil.create('div', 'pm-measure-ctl leaflet-bar');
+    btn = L.DomUtil.create('a', '', div);
+    btn.innerHTML = '&#128207; Measure';
+    btn.href = '#';
+    btn.title = 'Measure distance / area (click points, double-click to finish, Esc to cancel)';
+    clrBtn = L.DomUtil.create('a', 'clr', div);
+    clrBtn.innerHTML = 'clear';
+    clrBtn.href = '#';
+    clrBtn.style.display = 'none';
+    L.DomEvent.disableClickPropagation(div);
+    L.DomEvent.on(btn, 'click', function (e) {
+      L.DomEvent.stop(e);
+      active = !active;
+      btn.className = active ? 'on' : '';
+      map.getContainer().style.cursor = active ? 'crosshair' : '';
+      if (active) map.doubleClickZoom.disable(); else { map.doubleClickZoom.enable(); pts = []; redraw(); }
+    });
+    L.DomEvent.on(clrBtn, 'click', function (e) {
+      L.DomEvent.stop(e);
+      layers.clearLayers(); pts = []; redraw();
+      clrBtn.style.display = 'none';
+    });
+    return div;
+  };
+  ctl.addTo(map);
+  map.on('click', onClick);
+  map.on('dblclick', onDbl);
+  document.addEventListener('keydown', onKey);
+}
+</script>
+
+<!-- Viewer logic copied verbatim into the exported map file. Kept as text/plain so it
+     does not run on this page; the generator has its own preview code below. -->
+<script id="viewer-src" type="text/plain">
+var sat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+  { attribution: 'Esri World Imagery', maxZoom: 21, maxNativeZoom: 19 });
+var street = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+  { attribution: '&copy; OpenStreetMap', maxZoom: 21, maxNativeZoom: 19 });
+var map = L.map('map', { layers: [sat] });
+L.control.layers({ 'Satellite': sat, 'Street': street }).addTo(map);
+L.control.scale({ imperial: true }).addTo(map);
+if (typeof pmAddMeasure === 'function') pmAddMeasure(map);
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+var group = L.featureGroup();
+PHOTOS.forEach(function (p, i) {
+  var m = L.marker([p.lat, p.lon], {
+    icon: L.divIcon({ className:'', iconSize:[22,22], iconAnchor:[11,11],
+      html:'<div style="width:22px;height:22px;border-radius:50%;background:#e8590c;border:2px solid #fff;box-sizing:border-box;color:#fff;font:600 11px/18px system-ui,sans-serif;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.5);">'+p.seq+'</div>' })
+  });
+  var html = '<div class="pm-pop">' +
+             '<img src="' + p.dataUrl + '" onclick="pmLb(' + i + ')" alt="">' +
+             '<div class="cap"><b>' + p.seq + '</b> &middot; ' + esc(p.name) + (p.time ? ' &middot; ' + esc(p.time) : '') + '</div>' +
+             (p.cap ? '<div class="usercap">' + esc(p.cap) + '</div>' : '') + '</div>';
+  m.bindPopup(html, { maxWidth: 340 });
+  m.bindTooltip(p.seq + ' · ' + p.name);
+  group.addLayer(m);
+});
+group.addTo(map);
+if (PHOTOS.length) { map.fitBounds(group.getBounds().pad(0.15)); } else { map.setView([33.7, -117.8], 10); }
+function pmLb(i) {
+  document.getElementById('pm-lightbox-img').src = PHOTOS[i].dataUrl;
+  document.getElementById('pm-lightbox').style.display = 'flex';
+}
+</script>
+
+<script>
+/* ---------- generator ---------- */
+var state = { photos: [], nogps: [], skipped: [] };
+var uid = 0;
+
+var sat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+  { attribution: 'Esri World Imagery', maxZoom: 21, maxNativeZoom: 19 });
+var street = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+  { attribution: '&copy; OpenStreetMap', maxZoom: 21, maxNativeZoom: 19 });
+var map = L.map('map', { layers: [sat] }).setView([33.7, -117.8], 9);
+L.control.layers({ 'Satellite': sat, 'Street': street }).addTo(map);
+L.control.scale({ imperial: true }).addTo(map);
+pmAddMeasure(map);
+var group = L.featureGroup().addTo(map);
+
+var drop = document.getElementById('drop');
+var fileInput = document.getElementById('file-input');
+var statusEl = document.getElementById('status');
+var skippedEl = document.getElementById('skipped');
+var plistEl = document.getElementById('plist');
+var dlBtn = document.getElementById('dl-btn');
+var logBtn = document.getElementById('log-btn');
+var kmzBtn = document.getElementById('kmz-btn');
+
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function xesc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function pad2(n){ return (n<10?'0':'')+n; }
+function fmtDate(d){
+  if (!(d instanceof Date) || isNaN(+d)) return '';
+  return d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate())+' '+pad2(d.getHours())+':'+pad2(d.getMinutes());
+}
+function getTitle(){ return document.getElementById('title-input').value.trim() || 'Job Walk Photos'; }
+function safeName(t){ return (t.replace(/[\\/:*?"<>|]+/g, '-').replace(/\s+/g, ' ').trim() || 'photos'); }
+function saveBlob(blob, fname){
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = fname;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 2000);
+}
+function dateRange(list){
+  var times = list.map(function(p){ return p.time; }).filter(Boolean).sort();
+  if (!times.length) return new Date().toISOString().slice(0,10);
+  var a = times[0].slice(0,10), b = times[times.length-1].slice(0,10);
+  return a === b ? a : a + ' to ' + b;
+}
+
+drop.addEventListener('click', function(){ fileInput.click(); });
+fileInput.addEventListener('change', function(){ handleFiles(Array.from(fileInput.files)); fileInput.value=''; });
+['dragover','dragenter'].forEach(function(ev){
+  drop.addEventListener(ev, function(e){ e.preventDefault(); drop.classList.add('hover'); });
+  document.body.addEventListener(ev, function(e){ e.preventDefault(); });
+});
+['dragleave','drop'].forEach(function(ev){
+  drop.addEventListener(ev, function(e){ e.preventDefault(); drop.classList.remove('hover'); });
+});
+document.body.addEventListener('drop', async function(e){
+  e.preventDefault();
+  var files = await collectDropped(e.dataTransfer);
+  handleFiles(files);
+});
+
+async function collectDropped(dt){
+  var out = [];
+  if (dt.items && dt.items.length && dt.items[0].webkitGetAsEntry) {
+    var entries = [];
+    for (var i=0;i<dt.items.length;i++){
+      var en = dt.items[i].webkitGetAsEntry && dt.items[i].webkitGetAsEntry();
+      if (en) entries.push(en);
+    }
+    for (var j=0;j<entries.length;j++) await walkEntry(entries[j], out);
+    if (out.length) return out;
+  }
+  return Array.from(dt.files || []);
+}
+function walkEntry(entry, out){
+  return new Promise(function(resolve){
+    if (entry.isFile) {
+      entry.file(function(f){ out.push(f); resolve(); }, function(){ resolve(); });
+    } else if (entry.isDirectory) {
+      var reader = entry.createReader();
+      var readAll = function(){
+        reader.readEntries(async function(ents){
+          if (!ents.length) return resolve();
+          for (var i=0;i<ents.length;i++) await walkEntry(ents[i], out);
+          readAll();
+        }, function(){ resolve(); });
+      };
+      readAll();
+    } else resolve();
+  });
+}
+
+var IMG_RE = /\.(jpe?g|png|tiff?|heic|heif|webp)$/i;
+var busy = false;
+
+async function handleFiles(files){
+  if (busy) return;
+  files = files.filter(function(f){ return IMG_RE.test(f.name) || (f.type && f.type.indexOf('image/')===0); });
+  if (!files.length) return;
+  busy = true;
+  var n = 0;
+  for (var i=0;i<files.length;i++){
+    n++;
+    statusEl.innerHTML = 'Processing ' + n + ' / ' + files.length + '&hellip;';
+    try { await processFile(files[i]); }
+    catch(err){ state.skipped.push(files[i].name + ' (error: ' + (err && err.message || err) + ')'); }
+  }
+  busy = false;
+  refresh(true);
+}
+
+async function processFile(file){
+  var dup = state.photos.concat(state.nogps).some(function(p){ return p.name===file.name && p.size===file.size; });
+  if (dup) return;
+
+  var gps = null, when = null;
+  try { gps = await exifr.gps(file); } catch(e){}
+  try {
+    var meta = await exifr.parse(file, ['DateTimeOriginal','CreateDate','ModifyDate']);
+    when = meta && (meta.DateTimeOriginal || meta.CreateDate || meta.ModifyDate) || null;
+  } catch(e){}
+
+  var bmp = null;
+  try { bmp = await createImageBitmap(file, { imageOrientation: 'from-image' }); }
+  catch(e){
+    try { bmp = await loadViaImg(file); }
+    catch(e2){
+      var isHeic = /\.hei[cf]$/i.test(file.name);
+      state.skipped.push(file.name + (isHeic
+        ? ' (HEIC — browsers can’t open it; see Tips below)'
+        : ' (could not decode image)'));
+      return;
+    }
+  }
+
+  var maxPx = parseInt(document.getElementById('size-sel').value, 10) || 1200;
+  var scale = Math.min(1, maxPx / Math.max(bmp.width, bmp.height));
+  var w = Math.max(1, Math.round(bmp.width * scale));
+  var h = Math.max(1, Math.round(bmp.height * scale));
+  var cv = document.createElement('canvas');
+  cv.width = w; cv.height = h;
+  var ctx = cv.getContext('2d');
+  ctx.drawImage(bmp, 0, 0, w, h);
+  if (bmp.close) bmp.close();
+  var dataUrl = cv.toDataURL('image/jpeg', 0.78);
+
+  var entry = {
+    id: ++uid,
+    name: file.name,
+    size: file.size,
+    time: fmtDate(when),
+    t: (when instanceof Date && !isNaN(+when)) ? +when : 0,
+    dataUrl: dataUrl,
+    cap: ''
+  };
+  var hasGps = gps && gps.latitude != null && gps.longitude != null &&
+               !(gps.latitude === 0 && gps.longitude === 0);
+  if (hasGps) {
+    entry.lat = Math.round(gps.latitude * 1e6) / 1e6;
+    entry.lon = Math.round(gps.longitude * 1e6) / 1e6;
+    state.photos.push(entry);
+  } else {
+    state.nogps.push(entry);
+  }
+}
+
+function loadViaImg(file){
+  return new Promise(function(resolve, reject){
+    var url = URL.createObjectURL(file);
+    var img = new Image();
+    img.onload = function(){ URL.revokeObjectURL(url); resolve(img); };
+    img.onerror = function(){ URL.revokeObjectURL(url); reject(new Error('decode failed')); };
+    img.src = url;
+  });
+}
+
+/* all decoded photos, numbered chronologically; numbers match map/log/KMZ */
+function allSorted(){
+  var all = state.photos.concat(state.nogps).slice().sort(function(a,b){
+    var ta = a.t || Number.MAX_SAFE_INTEGER; /* photos with no timestamp sort last */
+    var tb = b.t || Number.MAX_SAFE_INTEGER;
+    if (ta !== tb) return ta - tb;
+    return a.name.localeCompare(b.name);
+  });
+  all.forEach(function(p, i){ p.seq = i + 1; });
+  return all;
+}
+
+function refresh(fit){
+  var all = allSorted();
+  var mapped = all.filter(function(p){ return p.lat != null; });
+
+  group.clearLayers();
+  mapped.forEach(function(p){
+    var m = L.marker([p.lat, p.lon], {
+      icon: L.divIcon({ className:'', iconSize:[22,22], iconAnchor:[11,11],
+        html:'<div style="width:22px;height:22px;border-radius:50%;background:#e8590c;border:2px solid #fff;box-sizing:border-box;color:#fff;font:600 11px/18px system-ui,sans-serif;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.5);">'+p.seq+'</div>' })
+    });
+    m.bindPopup(function(){
+      return '<div class="pm-pop">' +
+             '<img src="' + p.dataUrl + '" alt="">' +
+             '<div class="cap"><b>' + p.seq + '</b> &middot; ' + esc(p.name) + (p.time ? ' &middot; ' + esc(p.time) : '') + '</div>' +
+             (p.cap ? '<div class="usercap">' + esc(p.cap) + '</div>' : '') + '</div>';
+    }, { maxWidth: 340 });
+    m.bindTooltip(p.seq + ' · ' + p.name);
+    group.addLayer(m);
+  });
+  document.getElementById('map-empty').style.display = mapped.length ? 'none' : 'flex';
+  if (mapped.length && fit) map.fitBounds(group.getBounds().pad(0.15));
+
+  var bytes = all.reduce(function(s,p){ return s + p.dataUrl.length * 0.75; }, 0);
+  var mb = (bytes / 1e6);
+  var line = all.length
+    ? '<span class="ok">' + mapped.length + ' mapped</span>' +
+      (state.nogps.length ? ', <span class="warn">' + state.nogps.length + ' log-only (no GPS)</span>' : '') +
+      ' &mdash; est. file size ' + (mb < 0.1 ? '&lt;0.1' : mb.toFixed(1)) + ' MB' +
+      (mb > 35 ? ' <span class="warn">(large for email &mdash; try a smaller photo size)</span>' : '')
+    : 'No photos yet.';
+  if (state.skipped.length) line += '<br><span class="warn">' + state.skipped.length + ' skipped</span>';
+  statusEl.innerHTML = line;
+
+  skippedEl.style.display = state.skipped.length ? 'block' : 'none';
+  skippedEl.textContent = state.skipped.map(function(s){ return '⊘ ' + s; }).join('\n');
+
+  plistEl.innerHTML = all.map(function(p){
+    return '<div class="row">' + p.seq + '. ' + esc(p.name) +
+      (p.time ? ' · ' + esc(p.time) : '') +
+      (p.lat == null ? ' <span class="nog">no GPS — log only</span>' : '') +
+      '<input class="cap" data-id="' + p.id + '" placeholder="caption (optional)" value="' + esc(p.cap) + '">' +
+      '</div>';
+  }).join('');
+  Array.prototype.forEach.call(plistEl.querySelectorAll('input.cap'), function(inp){
+    inp.addEventListener('input', function(){
+      var id = parseInt(inp.getAttribute('data-id'), 10);
+      var hit = state.photos.concat(state.nogps).find(function(p){ return p.id === id; });
+      if (hit) hit.cap = inp.value;
+    });
+  });
+
+  dlBtn.disabled = !mapped.length;
+  kmzBtn.disabled = !mapped.length;
+  logBtn.disabled = !all.length;
+}
+
+document.getElementById('clear-btn').addEventListener('click', function(){
+  state.photos = []; state.nogps = []; state.skipped = [];
+  refresh(false);
+  statusEl.textContent = 'No photos loaded yet.';
+});
+
+/* ---------- export: map ---------- */
+dlBtn.addEventListener('click', function(){
+  var mapped = allSorted().filter(function(p){ return p.lat != null; });
+  var photos = mapped.map(function(p){
+    return { seq:p.seq, name:p.name, lat:p.lat, lon:p.lon, time:p.time, cap:p.cap, dataUrl:p.dataUrl };
+  });
+  var title = getTitle();
+  var dateStr = dateRange(mapped);
+
+  var json = JSON.stringify(photos).replace(/</g, '\\u003c');
+  var leafletCss = document.getElementById('leaflet-css').textContent;
+  var viewerCss = document.getElementById('viewer-css').textContent;
+  var leafletJs = document.getElementById('leaflet-js').textContent;
+  var measureJs = document.getElementById('measure-src').textContent;
+  var viewerJs = document.getElementById('viewer-src').textContent;
+  var SC = '<' + '/script>';
+
+  var html = '<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n' +
+    '<meta name="viewport" content="width=device-width, initial-scale=1">\n' +
+    '<title>' + esc(title) + '</title>\n' +
+    '<style>' + leafletCss + '</style>\n' +
+    '<style>' + viewerCss + '\nhtml, body { margin:0; height:100%; } #map { height:100%; } .leaflet-top { margin-top:34px; }</style>\n' +
+    '</head>\n<body>\n' +
+    '<div class="pm-hdr"><b>' + esc(title) + '</b> &mdash; ' + photos.length + ' photos, ' +
+    esc(dateStr) + '. Click a numbered dot; click the photo to enlarge. Ruler button measures ft / acres.</div>\n' +
+    '<div id="map"></div>\n' +
+    '<div id="pm-lightbox" onclick="this.style.display=\'none\'"><img id="pm-lightbox-img" alt=""></div>\n' +
+    '<script>' + leafletJs + SC + '\n' +
+    '<script>' + measureJs + SC + '\n' +
+    '<script>var PHOTOS = ' + json + ';' + SC + '\n' +
+    '<script>' + viewerJs + SC + '\n' +
+    '</body>\n</html>';
+
+  saveBlob(new Blob([html], { type: 'text/html' }), safeName(title) + ' - map.html');
+});
+
+/* ---------- export: photo log ---------- */
+logBtn.addEventListener('click', function(){
+  var all = allSorted();
+  var title = getTitle();
+  var dateStr = dateRange(all);
+
+  var entries = all.map(function(p){
+    return '<div class="entry">' +
+      '<div class="imgbox"><img src="' + p.dataUrl + '" alt=""></div>' +
+      '<div class="meta">' +
+        '<span class="num">Photo ' + p.seq + '</span> &middot; ' + esc(p.name) +
+        (p.time ? ' &middot; ' + esc(p.time) : '') + '<br>' +
+        (p.lat != null
+          ? '<span class="coords">' + p.lat.toFixed(6) + ', ' + p.lon.toFixed(6) + '</span>'
+          : '<span class="coords nog">no GPS tag</span>') +
+      '</div>' +
+      '<div class="capline" contenteditable="true">' + (p.cap ? esc(p.cap) : '') + '</div>' +
+    '</div>';
+  }).join('\n');
+
+  var html = '<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n' +
+    '<meta name="viewport" content="width=device-width, initial-scale=1">\n' +
+    '<title>' + esc(title) + ' — Photo Log</title>\n' +
+    '<style>\n' +
+    'html,body{margin:0;font-family:system-ui,sans-serif;color:#111;background:#e9e9e9;}\n' +
+    '#page{max-width:8.5in;margin:0 auto;background:#fff;padding:.5in;box-sizing:border-box;min-height:11in;}\n' +
+    '#toolbar{position:sticky;top:0;background:#333;color:#fff;padding:8px 14px;font-size:13px;display:flex;gap:12px;align-items:center;z-index:10;}\n' +
+    '#toolbar button{padding:6px 14px;border:none;border-radius:4px;background:#e8590c;color:#fff;font-weight:600;cursor:pointer;font-size:13px;}\n' +
+    '#toolbar .hint{opacity:.85;}\n' +
+    'h1{font-size:18px;margin:0 0 2px;}\n' +
+    '.subtitle{font-size:12px;color:#555;margin:0 0 4px;}\n' +
+    '.prepared{font-size:12px;color:#555;margin:0 0 14px;border-bottom:2px solid #e8590c;padding-bottom:10px;}\n' +
+    '.prepared span[contenteditable]{border-bottom:1px dotted #999;min-width:120px;display:inline-block;}\n' +
+    '.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;}\n' +
+    '.entry{border:1px solid #ccc;border-radius:3px;padding:8px;break-inside:avoid;page-break-inside:avoid;}\n' +
+    '.imgbox{background:#f2f2f2;display:flex;align-items:center;justify-content:center;}\n' +
+    '.imgbox img{max-width:100%;max-height:3.1in;display:block;}\n' +
+    '.meta{font-size:11px;color:#333;padding-top:6px;line-height:1.5;}\n' +
+    '.num{font-weight:700;color:#e8590c;}\n' +
+    '.coords{color:#666;}\n' +
+    '.coords.nog{color:#b35c00;font-weight:600;}\n' +
+    '.capline{font-size:11.5px;min-height:2.4em;border-top:1px dotted #ccc;margin-top:5px;padding-top:4px;}\n' +
+    '.capline:empty:before{content:"caption — click to edit";color:#bbb;}\n' +
+    '@media print{body{background:#fff;}#toolbar{display:none;}#page{padding:0;max-width:none;min-height:0;}\n' +
+    '.capline:empty{border-top:none;}.capline:empty:before{content:"";}}\n' +
+    '@page{size:letter;margin:.5in;}\n' +
+    '</style>\n</head>\n<body>\n' +
+    '<div id="toolbar"><button onclick="window.print()">Print / Save as PDF</button>' +
+    '<span class="hint">Captions and the prepared-by line are editable &mdash; click any caption text, then print.</span></div>\n' +
+    '<div id="page">\n' +
+    '<h1>' + esc(title) + ' — Photo Log</h1>\n' +
+    '<p class="subtitle">' + all.length + ' photos &middot; ' + esc(dateStr) + '</p>\n' +
+    '<p class="prepared">Prepared by: <span contenteditable="true"> </span>&nbsp;&nbsp; Date: <span contenteditable="true">' +
+      new Date().toISOString().slice(0,10) + '</span></p>\n' +
+    '<div class="grid">\n' + entries + '\n</div>\n</div>\n</body>\n</html>';
+
+  saveBlob(new Blob([html], { type: 'text/html' }), safeName(title) + ' - photo log.html');
+});
+
+/* ---------- export: KMZ ---------- */
+kmzBtn.addEventListener('click', function(){
+  var mapped = allSorted().filter(function(p){ return p.lat != null; });
+  var title = getTitle();
+  var zip = new JSZip();
+
+  var pm = mapped.map(function(p){
+    var fn = 'files/photo_' + p.seq + '.jpg';
+    zip.file(fn, p.dataUrl.split(',')[1], { base64: true });
+    var desc = '<img src="' + fn + '" width="480"/><br/>' + xesc(p.name) +
+               (p.time ? ' · ' + xesc(p.time) : '') +
+               (p.cap ? '<br/><i>' + xesc(p.cap) + '</i>' : '');
+    desc = desc.replace(/\]\]>/g, ']]&gt;');
+    var when = p.t ? '<TimeStamp><when>' + new Date(p.t).toISOString() + '</when></TimeStamp>' : '';
+    return '<Placemark><name>' + p.seq + '</name><styleUrl>#pm</styleUrl>' +
+      '<description><![CDATA[' + desc + ']]></description>' + when +
+      '<Point><coordinates>' + p.lon + ',' + p.lat + ',0</coordinates></Point></Placemark>';
+  }).join('\n');
+
+  var kml = '<?xml version="1.0" encoding="UTF-8"?>\n' +
+    '<kml xmlns="http://www.opengis.net/kml/2.2"><Document>\n' +
+    '<name>' + xesc(title) + '</name>\n' +
+    '<Style id="pm"><IconStyle><color>ff0c59e8</color><scale>1.1</scale>' +
+    '<Icon><href>http://maps.google.com/mapfiles/kml/paddle/wht-blank.png</href></Icon></IconStyle>' +
+    '<LabelStyle><scale>0.9</scale></LabelStyle></Style>\n' +
+    pm + '\n</Document></kml>\n';
+
+  zip.file('doc.kml', kml);
+  zip.generateAsync({ type: 'blob', mimeType: 'application/vnd.google-earth.kmz', compression: 'STORE' })
+    .then(function(blob){ saveBlob(blob, safeName(title) + '.kmz'); });
+});
+
+/* popup image -> lightbox (generator preview) */
+map.on('popupopen', function(e){
+  var img = e.popup.getElement().querySelector('.pm-pop img');
+  if (img) img.onclick = function(){
+    document.getElementById('pm-lightbox-img').src = img.src;
+    document.getElementById('pm-lightbox').style.display = 'flex';
+  };
+});
+</script>
+</body>
+</html>

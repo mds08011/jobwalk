@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PinMap — Plan Sheet Photo Pins</title>
+<style id="leaflet-css">
+@@LEAFLET_CSS@@
+</style>
+<style id="viewer-css">
+/* shared with the exported file */
+.pm-hdr { position:absolute; top:0; left:0; right:0; z-index:1000;
+  background:rgba(255,255,255,.93); padding:6px 12px; font-size:13px;
+  border-bottom:1px solid #ccc; pointer-events:none; font-family:system-ui,sans-serif; }
+.pm-pop img { max-width:320px; width:100%; display:block; border-radius:2px; cursor:pointer; }
+.pm-pop .cap { font-size:12px; color:#333; padding-top:4px; font-family:system-ui,sans-serif; }
+.pm-pop .usercap { font-size:12px; color:#111; padding-top:2px; font-style:italic; font-family:system-ui,sans-serif; }
+.leaflet-popup-content { margin:8px; }
+.leaflet-container { background:#dcdcd8; }
+#pm-lightbox { display:none; position:fixed; inset:0; z-index:2000;
+  background:rgba(0,0,0,.88); cursor:zoom-out; align-items:center; justify-content:center; }
+#pm-lightbox img { max-width:96vw; max-height:96vh; }
+</style>
+<style>
+/* generator UI only */
+html, body { margin:0; height:100%; font-family:system-ui,sans-serif; background:#f4f4f2; color:#222; }
+#app { display:flex; height:100%; }
+#side { width:360px; min-width:320px; background:#fff; border-right:1px solid #ddd;
+  display:flex; flex-direction:column; overflow-y:auto; }
+#side .pad { padding:14px 16px; }
+h1 { font-size:17px; margin:0 0 2px; }
+h1 .dot { color:#e8590c; }
+.sub { font-size:12px; color:#666; margin:0 0 12px; }
+.xlink { font-size:11.5px; margin:-8px 0 12px; }
+.xlink a { color:#b34a06; }
+label { display:block; font-size:12px; font-weight:600; margin:10px 0 3px; }
+input[type=text], select { width:100%; box-sizing:border-box; padding:7px 8px;
+  border:1px solid #ccc; border-radius:4px; font-size:13px; font-family:inherit; }
+.dz { border:2px dashed #bbb; border-radius:6px; padding:14px 10px; text-align:center;
+  font-size:12.5px; color:#555; margin-top:8px; cursor:pointer; transition:all .15s; }
+.dz.hover { border-color:#e8590c; background:#fff4ec; color:#e8590c; }
+.dz b { color:#e8590c; }
+.dz input { display:none; }
+#pagesel-row { display:none; margin-top:6px; font-size:12px; }
+#pagesel-row select { width:auto; padding:4px 6px; margin-left:6px; }
+button { font-family:inherit; font-size:13px; border-radius:4px; cursor:pointer; }
+#dl-btn { width:100%; padding:10px; margin-top:12px; background:#e8590c; color:#fff;
+  border:none; font-weight:600; font-size:14px; }
+button:disabled { background:#ccc !important; color:#fff !important; border-color:#ccc !important; cursor:not-allowed; }
+#clear-btn { width:100%; padding:6px; margin-top:6px; background:#fff; color:#666; border:1px solid #ccc; }
+#status { font-size:12.5px; margin-top:10px; line-height:1.45; }
+#status .ok { color:#1a7f37; font-weight:600; }
+#status .warn { color:#b35c00; }
+#tray { margin-top:8px; max-height:300px; overflow-y:auto; }
+.trow { display:flex; gap:8px; padding:6px 4px; border:1px solid #eee; border-radius:4px;
+  margin-bottom:4px; cursor:pointer; align-items:flex-start; }
+.trow.armed { border-color:#e8590c; background:#fff4ec; }
+.trow img { width:52px; height:40px; object-fit:cover; border-radius:2px; flex:none; }
+.trow .info { flex:1; font-size:11.5px; color:#444; min-width:0; }
+.trow .nm { font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.trow .st { font-size:11px; }
+.trow .st.pinned { color:#1a7f37; }
+.trow .st.unpinned { color:#b35c00; }
+.trow .st a { color:#999; margin-left:6px; }
+.trow input.cap { width:100%; box-sizing:border-box; margin-top:3px; padding:2px 5px;
+  border:1px solid #ddd; border-radius:3px; font-size:11px; }
+details { font-size:12px; color:#555; margin-top:14px; border-top:1px solid #eee; padding-top:10px; }
+summary { cursor:pointer; font-weight:600; color:#444; }
+details li { margin:5px 0; }
+#mapwrap { flex:1; position:relative; }
+#map { height:100%; }
+#map-empty { position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+  z-index:500; color:#888; font-size:14px; background:#e9e7e2; text-align:center; padding:0 30px; }
+#armed-banner { display:none; position:absolute; top:0; left:0; right:0; z-index:1000;
+  background:rgba(232,89,12,.92); color:#fff; padding:6px 12px; font-size:13px; font-weight:600;
+  pointer-events:none; }
+.privacy { font-size:11px; color:#999; margin-top:10px; }
+@media (max-width:700px){ #app{flex-direction:column;} #side{width:auto;min-width:0;max-height:55%;} }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="side">
+    <div class="pad">
+      <h1>Pin<span class="dot">Map</span></h1>
+      <p class="sub">Pin photos on a plan sheet or aerial by hand &mdash; for indoors and tight sites where GPS is useless. Nothing is uploaded.</p>
+      <p class="xlink">Photos have GPS tags? Use <a href="index.html">PhotoMap &rarr;</a></p>
+
+      <label for="title-input">Title</label>
+      <input type="text" id="title-input" placeholder="e.g. Headworks Bldg — Job Walk 2026-08-30">
+
+      <label>1 &mdash; Plan sheet / aerial</label>
+      <div class="dz" id="sheet-dz">
+        <b>Drop a PDF or image here</b><br>or click to browse
+        <input type="file" id="sheet-input" accept="application/pdf,image/*,.pdf">
+      </div>
+      <div id="pagesel-row">PDF page: <select id="page-sel"></select></div>
+
+      <label>2 &mdash; Photos</label>
+      <div class="dz" id="photo-dz">
+        <b>Drop photos here</b><br>or click to browse
+        <input type="file" id="photo-input" multiple accept="image/*,.jpg,.jpeg,.png">
+      </div>
+
+      <div id="status">Load a plan sheet to start.</div>
+      <div id="tray"></div>
+
+      <button id="dl-btn" disabled>Download pinned map file</button>
+      <button id="clear-btn">Clear all</button>
+
+      <details>
+        <summary>How it works</summary>
+        <ul>
+          <li>Load the sheet, drop your photos, then: the highlighted photo in the list is "armed" &mdash; <b>click the sheet where it was taken</b> to place its pin. The next unpinned photo arms automatically, so you can go click-click-click down the walk.</li>
+          <li><b>Drag</b> a pin to adjust it. Click a pin to see the photo. "unpin" in the list removes a pin.</li>
+          <li>Plan sheet PDFs work directly (pick the page). For a plan area from a bigger sheet, a screenshot (Win+Shift+S) pasted into a file works too.</li>
+          <li>Captions typed in the list show up in the pin popups of the exported file.</li>
+          <li>The downloaded file is fully self-contained and works with no internet at all &mdash; no basemap needed.</li>
+        </ul>
+      </details>
+      <p class="privacy">Everything runs locally in your browser &mdash; no data is uploaded anywhere.</p>
+    </div>
+  </div>
+  <div id="mapwrap">
+    <div id="map"></div>
+    <div id="armed-banner"></div>
+    <div id="map-empty">Load a plan sheet (PDF or image) to start</div>
+  </div>
+</div>
+<div id="pm-lightbox" onclick="this.style.display='none'"><img id="pm-lightbox-img" alt=""></div>
+
+<script id="leaflet-js">
+@@LEAFLET_JS@@
+</script>
+<script id="exifr-js">
+@@EXIFR_JS@@
+</script>
+<script id="pdfjs-js">
+@@PDFJS_JS@@
+</script>
+<script id="pdf-worker-src" type="text/plain">
+@@PDF_WORKER@@
+</script>
+
+<!-- Viewer logic copied verbatim into the exported file. -->
+<script id="viewer-src" type="text/plain">
+var h = SHEET.h, w = SHEET.w;
+var map = L.map('map', { crs: L.CRS.Simple, minZoom: -5, zoomSnap: 0.25, attributionControl: false });
+var bounds = L.latLngBounds([[0, 0], [h, w]]);
+L.imageOverlay(SHEET.dataUrl, bounds).addTo(map);
+map.fitBounds(bounds);
+map.setMaxBounds(bounds.pad(0.4));
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+PINS.forEach(function (p, i) {
+  var m = L.marker([p.lat, p.lng], {
+    icon: L.divIcon({ className:'', iconSize:[22,22], iconAnchor:[11,11],
+      html:'<div style="width:22px;height:22px;border-radius:50%;background:#e8590c;border:2px solid #fff;box-sizing:border-box;color:#fff;font:600 11px/18px system-ui,sans-serif;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.5);">'+p.seq+'</div>' })
+  }).addTo(map);
+  var html = '<div class="pm-pop">' +
+             '<img src="' + p.dataUrl + '" onclick="pmLb(' + i + ')" alt="">' +
+             '<div class="cap"><b>' + p.seq + '</b> &middot; ' + esc(p.name) + (p.time ? ' &middot; ' + esc(p.time) : '') + '</div>' +
+             (p.cap ? '<div class="usercap">' + esc(p.cap) + '</div>' : '') + '</div>';
+  m.bindPopup(html, { maxWidth: 340 });
+  m.bindTooltip(p.seq + ' · ' + p.name);
+});
+function pmLb(i) {
+  document.getElementById('pm-lightbox-img').src = PINS[i].dataUrl;
+  document.getElementById('pm-lightbox').style.display = 'flex';
+}
+</script>
+
+<script>
+/* ---------- generator ---------- */
+var SHEET = null;             /* { dataUrl, w, h } */
+var state = { photos: [] };   /* { id, name, size, time, t, dataUrl, cap, lat, lng, marker } */
+var uid = 0;
+var armedId = null;
+var pdfDoc = null;
+var map = null, overlay = null, bounds = null;
+
+/* pdf.js worker from the inline copy above */
+if (window.pdfjsLib) {
+  var wsrc = document.getElementById('pdf-worker-src').textContent;
+  pdfjsLib.GlobalWorkerOptions.workerSrc =
+    URL.createObjectURL(new Blob([wsrc], { type: 'text/javascript' }));
+}
+
+var statusEl = document.getElementById('status');
+var trayEl = document.getElementById('tray');
+var dlBtn = document.getElementById('dl-btn');
+var banner = document.getElementById('armed-banner');
+
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function pad2(n){ return (n<10?'0':'')+n; }
+function fmtDate(d){
+  if (!(d instanceof Date) || isNaN(+d)) return '';
+  return d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate())+' '+pad2(d.getHours())+':'+pad2(d.getMinutes());
+}
+function getTitle(){ return document.getElementById('title-input').value.trim() || 'Pinned Photo Map'; }
+function safeName(t){ return (t.replace(/[\\/:*?"<>|]+/g, '-').replace(/\s+/g, ' ').trim() || 'pinned map'); }
+function saveBlob(blob, fname){
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = fname;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 2000);
+}
+
+/* ---------- drop zones ---------- */
+function wireDz(dzId, inputId, handler){
+  var dz = document.getElementById(dzId);
+  var input = document.getElementById(inputId);
+  dz.addEventListener('click', function(){ input.click(); });
+  input.addEventListener('change', function(){ handler(Array.from(input.files)); input.value=''; });
+  ['dragover','dragenter'].forEach(function(ev){
+    dz.addEventListener(ev, function(e){ e.preventDefault(); e.stopPropagation(); dz.classList.add('hover'); });
+  });
+  ['dragleave'].forEach(function(ev){
+    dz.addEventListener(ev, function(e){ e.preventDefault(); dz.classList.remove('hover'); });
+  });
+  dz.addEventListener('drop', function(e){
+    e.preventDefault(); e.stopPropagation(); dz.classList.remove('hover');
+    handler(Array.from(e.dataTransfer.files));
+  });
+}
+['dragover','dragenter','drop'].forEach(function(ev){
+  document.body.addEventListener(ev, function(e){ e.preventDefault(); });
+});
+wireDz('sheet-dz', 'sheet-input', loadSheetFiles);
+wireDz('photo-dz', 'photo-input', addPhotos);
+
+/* ---------- sheet loading ---------- */
+async function loadSheetFiles(files){
+  if (!files.length) return;
+  var f = files[0];
+  if (state.photos.some(function(p){ return p.marker; }) &&
+      !confirm('Loading a new sheet removes the pins already placed. Continue?')) return;
+  try {
+    if (/\.pdf$/i.test(f.name) || f.type === 'application/pdf') await loadPdf(f);
+    else await loadSheetImage(f);
+  } catch (err) {
+    statusEl.innerHTML = '<span class="warn">Could not read that sheet: ' + esc(err && err.message || err) + '</span>';
+    return;
+  }
+}
+
+async function loadPdf(f){
+  statusEl.textContent = 'Reading PDF…';
+  var buf = await f.arrayBuffer();
+  pdfDoc = await pdfjsLib.getDocument({ data: buf }).promise;
+  var sel = document.getElementById('page-sel');
+  sel.innerHTML = '';
+  for (var i = 1; i <= pdfDoc.numPages; i++) {
+    var o = document.createElement('option');
+    o.value = i; o.textContent = i + ' of ' + pdfDoc.numPages;
+    sel.appendChild(o);
+  }
+  document.getElementById('pagesel-row').style.display = pdfDoc.numPages > 1 ? 'block' : 'none';
+  await renderPdfPage(1);
+}
+document.getElementById('page-sel').addEventListener('change', async function(){
+  if (!pdfDoc) return;
+  if (state.photos.some(function(p){ return p.marker; }) &&
+      !confirm('Changing the page removes the pins already placed. Continue?')) return;
+  await renderPdfPage(parseInt(this.value, 10));
+});
+
+async function renderPdfPage(n){
+  statusEl.textContent = 'Rendering page ' + n + '…';
+  var page = await pdfDoc.getPage(n);
+  var vp1 = page.getViewport({ scale: 1 });
+  var scale = Math.min(4, 2600 / Math.max(vp1.width, vp1.height));
+  var vp = page.getViewport({ scale: scale });
+  var cv = document.createElement('canvas');
+  cv.width = Math.round(vp.width); cv.height = Math.round(vp.height);
+  var ctx = cv.getContext('2d');
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, cv.width, cv.height);
+  await page.render({ canvasContext: ctx, viewport: vp }).promise;
+  setSheet(cv.toDataURL('image/jpeg', 0.85), cv.width, cv.height);
+}
+
+async function loadSheetImage(f){
+  statusEl.textContent = 'Reading image…';
+  var bmp;
+  try { bmp = await createImageBitmap(f, { imageOrientation: 'from-image' }); }
+  catch(e){ bmp = await loadViaImg(f); }
+  var scale = Math.min(1, 3000 / Math.max(bmp.width, bmp.height));
+  var w = Math.max(1, Math.round(bmp.width * scale));
+  var h = Math.max(1, Math.round(bmp.height * scale));
+  var cv = document.createElement('canvas');
+  cv.width = w; cv.height = h;
+  var ctx = cv.getContext('2d');
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, w, h);
+  ctx.drawImage(bmp, 0, 0, w, h);
+  if (bmp.close) bmp.close();
+  setSheet(cv.toDataURL('image/jpeg', 0.85), w, h);
+}
+
+function loadViaImg(file){
+  return new Promise(function(resolve, reject){
+    var url = URL.createObjectURL(file);
+    var img = new Image();
+    img.onload = function(){ URL.revokeObjectURL(url); resolve(img); };
+    img.onerror = function(){ URL.revokeObjectURL(url); reject(new Error('could not decode image')); };
+    img.src = url;
+  });
+}
+
+function setSheet(dataUrl, w, h){
+  SHEET = { dataUrl: dataUrl, w: w, h: h };
+  /* drop existing pins — new coordinate space */
+  state.photos.forEach(function(p){
+    if (p.marker) { map && map.removeLayer(p.marker); }
+    p.marker = null; p.lat = null; p.lng = null;
+  });
+  if (!map) {
+    map = L.map('map', { crs: L.CRS.Simple, minZoom: -5, zoomSnap: 0.25, attributionControl: false });
+    map.on('click', onMapClick);
+  }
+  if (overlay) map.removeLayer(overlay);
+  bounds = L.latLngBounds([[0, 0], [h, w]]);
+  overlay = L.imageOverlay(dataUrl, bounds).addTo(map);
+  map.setMaxBounds(bounds.pad(0.4));
+  map.fitBounds(bounds);
+  document.getElementById('map-empty').style.display = 'none';
+  armNext();
+  refresh();
+}
+
+/* ---------- photos ---------- */
+async function addPhotos(files){
+  files = files.filter(function(f){
+    return /\.(jpe?g|png|webp)$/i.test(f.name) || (f.type && f.type.indexOf('image/')===0);
+  });
+  for (var i = 0; i < files.length; i++) {
+    statusEl.innerHTML = 'Processing photo ' + (i+1) + ' / ' + files.length + '&hellip;';
+    try { await addPhoto(files[i]); } catch(e){}
+  }
+  sortPhotos();
+  if (armedId == null) armNext();
+  refresh();
+}
+
+async function addPhoto(file){
+  if (state.photos.some(function(p){ return p.name===file.name && p.size===file.size; })) return;
+  var when = null;
+  try {
+    var meta = await exifr.parse(file, ['DateTimeOriginal','CreateDate','ModifyDate']);
+    when = meta && (meta.DateTimeOriginal || meta.CreateDate || meta.ModifyDate) || null;
+  } catch(e){}
+  var bmp;
+  try { bmp = await createImageBitmap(file, { imageOrientation: 'from-image' }); }
+  catch(e){ bmp = await loadViaImg(file); }
+  var scale = Math.min(1, 1200 / Math.max(bmp.width, bmp.height));
+  var w = Math.max(1, Math.round(bmp.width * scale));
+  var h = Math.max(1, Math.round(bmp.height * scale));
+  var cv = document.createElement('canvas');
+  cv.width = w; cv.height = h;
+  cv.getContext('2d').drawImage(bmp, 0, 0, w, h);
+  if (bmp.close) bmp.close();
+  state.photos.push({
+    id: ++uid, name: file.name, size: file.size,
+    time: fmtDate(when), t: (when instanceof Date && !isNaN(+when)) ? +when : 0,
+    dataUrl: cv.toDataURL('image/jpeg', 0.78),
+    cap: '', lat: null, lng: null, marker: null
+  });
+}
+
+function sortPhotos(){
+  state.photos.sort(function(a,b){
+    var ta = a.t || Number.MAX_SAFE_INTEGER, tb = b.t || Number.MAX_SAFE_INTEGER;
+    if (ta !== tb) return ta - tb;
+    return a.name.localeCompare(b.name);
+  });
+  state.photos.forEach(function(p, i){
+    p.seq = i + 1;
+    if (p.marker) p.marker.setIcon(pinIcon(p.seq));
+  });
+}
+
+function pinIcon(seq){
+  return L.divIcon({ className:'', iconSize:[22,22], iconAnchor:[11,11],
+    html:'<div style="width:22px;height:22px;border-radius:50%;background:#e8590c;border:2px solid #fff;box-sizing:border-box;color:#fff;font:600 11px/18px system-ui,sans-serif;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.5);">'+seq+'</div>' });
+}
+
+/* ---------- pinning ---------- */
+function onMapClick(e){
+  if (armedId == null || !SHEET) return;
+  var p = state.photos.find(function(x){ return x.id === armedId; });
+  if (!p) return;
+  p.lat = e.latlng.lat; p.lng = e.latlng.lng;
+  if (p.marker) { p.marker.setLatLng(e.latlng); }
+  else {
+    p.marker = L.marker(e.latlng, { icon: pinIcon(p.seq), draggable: true }).addTo(map);
+    p.marker.bindPopup(function(){
+      return '<div class="pm-pop">' +
+             '<img src="' + p.dataUrl + '" alt="">' +
+             '<div class="cap"><b>' + p.seq + '</b> &middot; ' + esc(p.name) + (p.time ? ' &middot; ' + esc(p.time) : '') + '</div>' +
+             (p.cap ? '<div class="usercap">' + esc(p.cap) + '</div>' : '') + '</div>';
+    }, { maxWidth: 340 });
+    p.marker.bindTooltip(function(){ return p.seq + ' · ' + p.name; });
+    p.marker.on('dragend', function(){
+      var ll = p.marker.getLatLng();
+      p.lat = ll.lat; p.lng = ll.lng;
+    });
+  }
+  armNext();
+  refresh();
+}
+
+function armNext(){
+  var next = state.photos.find(function(p){ return !p.marker; });
+  armedId = next ? next.id : null;
+}
+
+function unpin(id){
+  var p = state.photos.find(function(x){ return x.id === id; });
+  if (p && p.marker) { map.removeLayer(p.marker); p.marker = null; p.lat = null; p.lng = null; }
+  if (armedId == null) armedId = id;
+  refresh();
+}
+
+/* ---------- UI ---------- */
+function refresh(){
+  var pinned = state.photos.filter(function(p){ return p.marker; }).length;
+  var total = state.photos.length;
+
+  if (!SHEET) statusEl.textContent = total ? 'Now load a plan sheet.' : 'Load a plan sheet to start.';
+  else if (!total) statusEl.textContent = 'Sheet loaded — now drop your photos.';
+  else statusEl.innerHTML = '<span class="ok">' + pinned + ' of ' + total + ' pinned</span>' +
+    (pinned < total ? ' — click the sheet to place the highlighted photo' : ' — all placed');
+
+  var armed = state.photos.find(function(p){ return p.id === armedId; });
+  if (armed && SHEET) {
+    banner.style.display = 'block';
+    banner.textContent = 'Click the sheet where photo ' + armed.seq + ' (' + armed.name + ') was taken';
+    map && (map.getContainer().style.cursor = 'crosshair');
+  } else {
+    banner.style.display = 'none';
+    map && (map.getContainer().style.cursor = '');
+  }
+
+  trayEl.innerHTML = state.photos.map(function(p){
+    return '<div class="trow' + (p.id === armedId ? ' armed' : '') + '" data-id="' + p.id + '">' +
+      '<img src="' + p.dataUrl + '" alt="">' +
+      '<div class="info">' +
+        '<div class="nm">' + p.seq + '. ' + esc(p.name) + '</div>' +
+        (p.time ? '<div>' + esc(p.time) + '</div>' : '') +
+        '<div class="st ' + (p.marker ? 'pinned' : 'unpinned') + '">' +
+          (p.marker ? '✓ pinned<a href="#" class="unpin" data-id="' + p.id + '">unpin</a>' : 'not pinned — click to arm') +
+        '</div>' +
+        '<input class="cap" data-id="' + p.id + '" placeholder="caption (optional)" value="' + esc(p.cap) + '">' +
+      '</div></div>';
+  }).join('');
+
+  Array.prototype.forEach.call(trayEl.querySelectorAll('.trow'), function(row){
+    row.addEventListener('click', function(e){
+      if (e.target.tagName === 'INPUT' || e.target.classList.contains('unpin')) return;
+      armedId = parseInt(row.getAttribute('data-id'), 10);
+      refresh();
+    });
+  });
+  Array.prototype.forEach.call(trayEl.querySelectorAll('a.unpin'), function(a){
+    a.addEventListener('click', function(e){
+      e.preventDefault(); e.stopPropagation();
+      unpin(parseInt(a.getAttribute('data-id'), 10));
+    });
+  });
+  Array.prototype.forEach.call(trayEl.querySelectorAll('input.cap'), function(inp){
+    inp.addEventListener('input', function(){
+      var id = parseInt(inp.getAttribute('data-id'), 10);
+      var hit = state.photos.find(function(p){ return p.id === id; });
+      if (hit) hit.cap = inp.value;
+    });
+  });
+
+  dlBtn.disabled = !(SHEET && pinned);
+}
+
+document.getElementById('clear-btn').addEventListener('click', function(){
+  state.photos.forEach(function(p){ if (p.marker) map.removeLayer(p.marker); });
+  state.photos = [];
+  armedId = null;
+  refresh();
+});
+
+map && map.on('popupopen', function(){});
+document.addEventListener('click', function(e){
+  if (e.target && e.target.matches && e.target.matches('.pm-pop img')) {
+    document.getElementById('pm-lightbox-img').src = e.target.src;
+    document.getElementById('pm-lightbox').style.display = 'flex';
+  }
+});
+
+/* ---------- export ---------- */
+dlBtn.addEventListener('click', function(){
+  var pins = state.photos.filter(function(p){ return p.marker; }).map(function(p){
+    return { seq:p.seq, name:p.name, time:p.time, cap:p.cap,
+             lat:p.lat, lng:p.lng, dataUrl:p.dataUrl };
+  });
+  var title = getTitle();
+  var sheetJson = JSON.stringify(SHEET).replace(/</g, '\\u003c');
+  var pinsJson = JSON.stringify(pins).replace(/</g, '\\u003c');
+  var leafletCss = document.getElementById('leaflet-css').textContent;
+  var viewerCss = document.getElementById('viewer-css').textContent;
+  var leafletJs = document.getElementById('leaflet-js').textContent;
+  var viewerJs = document.getElementById('viewer-src').textContent;
+  var SC = '<' + '/script>';
+
+  var html = '<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n' +
+    '<meta name="viewport" content="width=device-width, initial-scale=1">\n' +
+    '<title>' + esc(title) + '</title>\n' +
+    '<style>' + leafletCss + '</style>\n' +
+    '<style>' + viewerCss + '\nhtml, body { margin:0; height:100%; } #map { height:100%; } .leaflet-top { margin-top:34px; }</style>\n' +
+    '</head>\n<body>\n' +
+    '<div class="pm-hdr"><b>' + esc(title) + '</b> &mdash; ' + pins.length +
+    ' photos. Click a numbered pin; click the photo to enlarge.</div>\n' +
+    '<div id="map"></div>\n' +
+    '<div id="pm-lightbox" onclick="this.style.display=\'none\'"><img id="pm-lightbox-img" alt=""></div>\n' +
+    '<script>' + leafletJs + SC + '\n' +
+    '<script>var SHEET = ' + sheetJson + ';\nvar PINS = ' + pinsJson + ';' + SC + '\n' +
+    '<script>' + viewerJs + SC + '\n' +
+    '</body>\n</html>';
+
+  saveBlob(new Blob([html], { type: 'text/html' }), safeName(title) + ' - pinned map.html');
+});
+
+refresh();
+</script>
+</body>
+</html>
