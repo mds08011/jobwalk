@@ -37,10 +37,15 @@ The shipped files are assembled from templates in [`dev/`](dev/) with all librar
 cd dev
 npm install          # fetches the libraries to inline
 python3 build.py     # writes ../index.html and ../pinmap.html
+
+pip install -r requirements.txt   # Pillow + piexif, only for the test fixtures
 python3 make_test_photos.py   # geotagged test JPEGs + a test plan-sheet PDF
 node test-photomap.js         # end-to-end tests in headless Chromium
 node test-pinmap.js
 ```
+
+On distros with an externally-managed Python (Ubuntu 23.04+, Debian 12+), run that
+`pip install` inside a `python3 -m venv` first.
 
 Edit `dev/template-photomap.html` / `dev/template-pinmap.html`, never the built files.
 

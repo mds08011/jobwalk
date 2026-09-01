@@ -1,0 +1,4 @@
+# Only needed to generate the test fixtures (make_test_photos.py).
+# build.py itself uses the standard library alone.
+Pillow>=10.2
+piexif>=1.1.3
